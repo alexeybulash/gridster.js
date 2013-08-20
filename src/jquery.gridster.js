@@ -327,6 +327,23 @@
         return $widget;
     };
 
+    fn.move_widget = function($widget, new_col, new_row) {
+        this.before_move_widget($widget, new_col, new_row);
+        $widget.attr({
+                'data-col': new_col,
+                'data-row': new_row
+        });
+    };
+
+    fn.before_move_widget = function($widget, new_col, new_row) {
+        // Looking for collisions
+        if (this.overlaps()) {
+        }
+    };
+
+    fn.overlaps = function (x1, y1, x2, y2) {
+    }
+
     /**
     * Move down widgets in cells represented by the arguments col, row, size_x,
     * size_y
@@ -735,6 +752,27 @@
             return false;
         }
 
+        if (this.$preview_holder) {
+            this.move_widget(
+                this.$preview_holder,
+                this.pxToCells(ui.position.left, 'x'),
+                this.pxToCells(ui.position.top, 'y')
+            );
+        }
+
+        if (this.$player) {
+            this.$player.css({
+                'left': ui.position.left,
+                'top': ui.position.top
+            });
+        }
+
+        if (this.options.draggable.drag) {
+            this.options.draggable.drag.call(this, event, ui);
+        }
+
+        return;
+
         var abs_offset = {
             left: ui.position.left + this.baseX,
             top: ui.position.top + this.baseY
@@ -1096,7 +1134,7 @@
             if (can_go_widget_up) {
                 //target CAN go up
                 //so move widget up
-                this.move_widget_to($w, can_go_widget_up);
+                this.move_widget_to_row($w, can_go_widget_up);
                 this.set_placeholder(to_col, can_go_widget_up + wgd.size_y);
 
             } else {
@@ -1628,12 +1666,12 @@
     * If the widget has widgets below, all of these widgets will be moved also
     * if they can.
     *
-    * @method move_widget_to
+    * @method move_widget_to_row
     * @param {HTMLElement} $widget The jQuery wrapped HTMLElement of the
     * widget is going to be moved.
     * @return {Class} Returns the instance of the Gridster Class.
     */
-    fn.move_widget_to = function($widget, row) {
+    fn.move_widget_to_row = function($widget, row) {
         var self = this;
         var widget_grid_data = $widget.coords().grid;
         var diff = row - widget_grid_data.row;
@@ -1658,7 +1696,7 @@
             var wgd = $w.coords().grid;
             var can_go_up = self.can_go_widget_up(wgd);
             if (can_go_up && can_go_up !== wgd.row) {
-                self.move_widget_to($w, can_go_up);
+                self.move_widget_to_row($w, can_go_up);
             }
         });
 
@@ -2583,6 +2621,19 @@
         this.$el.remove();
 
         return this;
+    };
+
+    fn.pxToCells = function(px, direction) {
+        var scale;
+        switch (direction) {
+            case 'y':
+                scale = this.min_widget_height;
+                break;
+            default:
+                scale = this.min_widget_width;
+        }
+
+        return Math.ceil(px / scale);
     };
 
 
