@@ -333,16 +333,133 @@
                 'data-col': new_col,
                 'data-row': new_row
         });
+        this.after_move_widget($widget, new_col, new_row);
     };
 
     fn.before_move_widget = function($widget, new_col, new_row) {
         // Looking for collisions
-        if (this.overlaps()) {
+        var gridster = this;
+        this.$widgets.each(function(){
+            if (!$(this).hasClass('player') && gridster.overlap($widget, $(this))) {
+                gridster.collide($widget, $(this));
+            }
+        });
+    };
+
+    fn.collide = function($widget1, $widget2) {
+        var overlapped_region = CollisionUtils.detect_overlapping_region(
+            this.get_widget_coords($widget1),
+            this.get_widget_coords($widget2)
+        );
+
+        console.log(overlapped_region);
+
+        if (overlapped_region[0] == 'N') {
+            this.move_widget_down($widget1, overlapped_region.height);
+        } else {
+            this.move_widget_down($widget2, overlapped_region.height);
         }
     };
 
-    fn.overlaps = function (x1, y1, x2, y2) {
-    }
+    fn.after_move_widget = function($widget, new_col, new_row) {
+        var gridster = this;
+        $(this.get_widgets_below($widget)).each(function(){
+            if (!$(this).hasClass('player'))
+                gridster.push_widget_up($(this));
+        });
+    };
+
+    fn.push_widget_up = function($widget){
+        var free_position_above = this.get_free_position_above($widget);
+        if (free_position_above){
+            $widget.attr({
+                    'data-col': get_widget_left_x($widget),
+                    'data-row': free_position_above
+            });
+        }
+    };
+
+    fn.get_widgets_above = function($widget){
+        var $widgets_above = [];
+        var gridster = this;
+        this.$widgets.each(function(){
+            if (CollisionUtils.is_above(
+                    gridster.get_widget_coords($(this)),
+                    gridster.get_widget_coords($widget)
+            )){ $widgets_above.push($(this)); }
+        });
+
+        return $widgets_above;
+    };
+
+    fn.get_widgets_below = function($widget){
+        var $widgets_below = [];
+        var gridster = this;
+        this.$widgets.each(function(){
+            if (CollisionUtils.is_below(
+                    gridster.get_widget_coords($(this)),
+                    gridster.get_widget_coords($widget)
+            )){ $widgets_below.push($(this)); }
+        });
+
+        return $widgets_below;
+    };
+
+    fn.get_free_position_above = function($widget) {
+        var current_top_y = this.get_widget_top_y($widget);
+        var lowest_y_above = 0;
+        var gridster = this;
+        this.get_widgets_above($widget).each(function(){
+            var widget_bottom_y = gridster.get_widget_bottom_y(this);
+            if (widget_bottom_y > lowest_y_above)
+                lowest_y_above = widget_bottom_y;
+        });
+
+        if (current_top_y - lowest_y_above > 0)
+            return lowest_y_above + 1;
+
+        return null;
+    };
+
+    fn.overlap = function ($widget1, $widget2) {
+        return CollisionUtils.overlaps(
+            this.get_widget_coords($widget1),
+            this.get_widget_coords($widget2)
+        );
+    };
+
+    fn.get_widget_left_x = function($widget) {
+        return +$widget.attr('data-col');
+    };
+
+    fn.get_widget_top_y = function($widget) {
+        return +$widget.attr('data-row');
+    };
+
+    fn.get_widget_right_x = function($widget) {
+        return this.get_widget_left_x($widget) + this.get_widget_width($widget) - 1;
+    };
+
+    fn.get_widget_bottom_y = function($widget) {
+        return this.get_widget_top_y($widget) + this.get_widget_height($widget) - 1;
+    };
+
+    fn.get_widget_height = function($widget) {
+        return +$widget.attr('data-sizey');
+    };
+
+    fn.get_widget_width = function($widget) {
+        return +$widget.attr('data-sizex');
+    };
+
+    fn.get_widget_coords = function($widget) {
+        return {
+            x1: this.get_widget_left_x($widget),
+            x2: this.get_widget_right_x($widget),
+            y1: this.get_widget_top_y($widget),
+            y2: this.get_widget_bottom_y($widget),
+        };
+    };
 
     /**
     * Move down widgets in cells represented by the arguments col, row, size_x,
@@ -727,10 +844,12 @@
               'class': 'preview-holder',
               'data-row': this.$player.attr('data-row'),
               'data-col': this.$player.attr('data-col'),
-              css: {
-                  width: coords.width,
-                  height: coords.height
-              }
+              'data-sizex': this.$player.attr('data-sizex'),
+              'data-sizey': this.$player.attr('data-sizey')
+              //css: {
+                  //width: coords.width,
+                  //height: coords.height
+              //}
         }).appendTo(this.$el);
 
         if (this.options.draggable.start) {
@@ -753,11 +872,9 @@
         }
 
         if (this.$preview_holder) {
-            this.move_widget(
-                this.$preview_holder,
-                this.pxToCells(ui.position.left, 'x'),
-                this.pxToCells(ui.position.top, 'y')
-            );
+            var move_to_x = this.pxToUnits(ui.position.left, 'x');
+            var move_to_y = this.pxToUnits(ui.position.top, 'y');
+            this.move_widget(this.$preview_holder, move_to_x, move_to_y);
         }
 
         if (this.$player) {
@@ -814,38 +931,40 @@
         this.$helper.add(this.$player).add(this.$wrapper)
             .removeClass('dragging');
 
-        ui.position.left = ui.position.left + this.baseX;
-        ui.position.top = ui.position.top + this.baseY;
-        this.colliders_data = this.collision_api.get_closest_colliders(ui.position);
+        //ui.position.left = ui.position.left + this.baseX;
+        //ui.position.top = ui.position.top + this.baseY;
+        //this.colliders_data = this.collision_api.get_closest_colliders(ui.position);
 
-        this.on_overlapped_column_change(
-            this.on_start_overlapping_column,
-            this.on_stop_overlapping_column
-        );
+        //this.on_overlapped_column_change(
+            //this.on_start_overlapping_column,
+            //this.on_stop_overlapping_column
+        //);
 
-        this.on_overlapped_row_change(
-            this.on_start_overlapping_row,
-            this.on_stop_overlapping_row
-        );
+        //this.on_overlapped_row_change(
+            //this.on_start_overlapping_row,
+            //this.on_stop_overlapping_row
+        //);
 
         this.$player.addClass('player-revert').removeClass('player')
             .attr({
-                'data-col': this.placeholder_grid_data.col,
-                'data-row': this.placeholder_grid_data.row
+                //'data-col': this.placeholder_grid_data.col,
+                //'data-row': this.placeholder_grid_data.row
+                'data-col': this.$preview_holder.attr('data-col'),
+                'data-row': this.$preview_holder.attr('data-row')
             }).css({
                 'left': '',
                 'top': ''
             });
 
-        this.$changed = this.$changed.add(this.$player);
+        //this.$changed = this.$changed.add(this.$player);
 
-        this.cells_occupied_by_player = this.get_cells_occupied(
-            this.placeholder_grid_data);
-        this.set_cells_player_occupies(
-            this.placeholder_grid_data.col, this.placeholder_grid_data.row);
+        //this.cells_occupied_by_player = this.get_cells_occupied(
+            //this.placeholder_grid_data);
+        //this.set_cells_player_occupies(
+            //this.placeholder_grid_data.col, this.placeholder_grid_data.row);
 
-        this.$player.coords().grid.row = this.placeholder_grid_data.row;
-        this.$player.coords().grid.col = this.placeholder_grid_data.col;
+        //this.$player.coords().grid.row = this.placeholder_grid_data.row;
+        //this.$player.coords().grid.col = this.placeholder_grid_data.col;
 
         if (this.options.draggable.stop) {
           this.options.draggable.stop.call(this, event, ui);
@@ -2623,7 +2742,7 @@
         return this;
     };
 
-    fn.pxToCells = function(px, direction) {
+    fn.pxToUnits = function(px, direction) {
         var scale;
         switch (direction) {
             case 'y':
@@ -2633,7 +2752,7 @@
                 scale = this.min_widget_width;
         }
 
-        return Math.ceil(px / scale);
+        return Math.ceil(px / scale + 0.5);
     };
 
 
