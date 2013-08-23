@@ -71,6 +71,7 @@ var CollisionUtils = {
     is_above : function(a, b){
         if (a.y2 < b.y1 &&
             (
+                (a.x1 < b.x1 && a.x2 > b.x2) ||
                 (a.x1 >= b.x1 && a.x1 <= b.x2) ||
                 (a.x2 >= b.x1 && a.x2 <= b.x2)
             )
